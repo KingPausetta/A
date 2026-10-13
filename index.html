@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Ruota delle Penalità</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Oswald:wght@500;700&family=Pirata+One&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050000;
+            color: #fff;
+            font-family: 'Oswald', sans-serif;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Canvas per le scintille di sfondo */
+        #sparks-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Testo Fiammeggiante */
+        .fiery-title {
+            font-family: 'Pirata One', serif;
+            color: #ff3300;
+            text-transform: uppercase;
+            text-shadow: 
+                0 0 5px #fff,
+                0 0 10px #ffcc00,
+                0 0 20px #ff6600,
+                0 0 40px #cc0000,
+                0 0 80px #660000;
+            letter-spacing: 2px;
+        }
+
+        /* Effetto pergamena bruciata per le regole */
+        .parchment {
+            background: #d4b581;
+            background-image: linear-gradient(to right, rgba(255,255,255,0.2), rgba(0,0,0,0.1)), url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.15"/></svg>');
+            color: #2b0a0a;
+            box-shadow: 
+                inset 0 0 30px #4a1505,
+                inset 0 0 10px #000,
+                0 10px 20px rgba(0,0,0,0.8);
+            border: 2px solid #5a1c06;
+            border-radius: 5px;
+            position: relative;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+        }
+        .parchment::before {
+            content: "";
+            position: absolute;
+            top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border: 2px dashed #3a0e05;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* Bottone centrale GIRA E SOFFRI */
+        .spin-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #8a1000 0%, #3d0000 80%, #1a0000 100%);
+            border: 6px solid #4d4d4d;
+            box-shadow: 
+                0 0 20px #ff0000,
+                inset 0 0 15px #000;
+            color: #ffcc00;
+            font-family: 'Pirata One', serif;
+            font-size: 1.8rem;
+            line-height: 1.1;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            text-transform: uppercase;
+            text-shadow: 2px 2px 4px #000;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .spin-button:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+            box-shadow: 0 0 30px #ff3300, inset 0 0 15px #000;
+        }
+        .spin-button:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        /* Puntatore della ruota */
+        .pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; 
+            height: 0; 
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #ff0000;
+            filter: drop-shadow(0 0 10px #ff0000) drop-shadow(0px 5px 2px #000);
+            z-index: 20;
+        }
+
+        /* Ruota Canvas Container */
+        .wheel-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            border-radius: 50%;
+            box-shadow: 0 0 50px rgba(255, 30, 0, 0.4), inset 0 0 20px #000;
+            background-color: #111;
+        }
+        canvas#wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: block;
+        }
+
+        /* Modale Popup */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background: radial-gradient(circle, #5e0000 0%, #1a0000 100%);
+            border: 4px solid #ff3300;
+            box-shadow: 0 0 50px #ff0000;
+            padding: 3rem 2rem;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 90%;
+            width: 600px;
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center py-10 px-4">
+
+    <!-- Sfondo animato scintille -->
+    <canvas id="sparks-canvas"></canvas>
+
+    <!-- Titolo -->
+    <h1 class="fiery-title text-5xl md:text-7xl text-center mb-8 drop-shadow-2xl">
+        La Ruota<br>delle Penalità
+    </h1>
+
+    <!-- Contenitore Ruota -->
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="800" height="800"></canvas>
+        <div class="spin-button" id="spinBtn">
+            Gira e<br>Soffri
+        </div>
+    </div>
+
+    <!-- Regole / Pergamena -->
+    <div class="max-w-2xl w-full text-center mt-12 z-10 relative">
+        <div class="parchment">
+            <h2 class="text-3xl mb-4 border-b-2 border-red-900 pb-2 text-red-900">REGOLE DELLA CONDANNA</h2>
+            <ul class="text-xl md:text-2xl text-left list-none space-y-3 font-bold leading-snug">
+                <li>🔥 OGNI 3 SCONFITTE SULLO STESSO GIOCO SI GIRA LA RUOTA</li>
+                <li>🔥 LA PENALITÀ VA ESEGUITA IMMEDIATAMENTE IN PARTITA</li>
+                <li>🔥 NESSUNA SCUSA. NESSUNA PIETÀ.</li>
+            </ul>
+        </div>
+        
+        <!-- Frase Finale -->
+        <h3 class="mt-8 text-2xl md:text-3xl text-red-600 font-bold tracking-wider" style="font-family: 'Cinzel', serif; text-shadow: 0 0 10px #ff0000;">
+            CADDY, BRUNO E STRÒPPI:<br>CHI SARÀ IL PRIMO A CADERE?
+        </h3>
+
+        <button id="shareBtn" class="mt-8 px-6 py-3 bg-black hover:bg-red-900 text-yellow-500 font-bold text-xl rounded border-2 border-red-700 transition-colors shadow-[0_0_15px_#ff0000] uppercase font-serif flex items-center justify-center mx-auto cursor-pointer z-10 relative">
+            🔗 Copia Link per gli Amici
+        </button>
+    </div>
+
+    <!-- Modale Risultato -->
+    <div class="modal-overlay" id="resultModal">
+        <div class="modal-content">
+            <h2 class="fiery-title text-4xl mb-2">IL DESTINO HA DECISO</h2>
+            <p class="text-2xl text-gray-300 mb-8 font-serif italic">Preparati ad affrontare la tua condanna...</p>
+            <div class="bg-black bg-opacity-60 border-2 border-red-600 p-6 rounded mb-8">
+                <h3 id="winnerText" class="text-3xl md:text-5xl font-bold text-white uppercase tracking-wide text-shadow-md">
+                    <!-- Il testo vincente apparirà qui -->
+                </h3>
+            </div>
+            <button id="closeModal" class="px-8 py-3 bg-red-800 hover:bg-red-600 text-white font-bold text-xl rounded border-2 border-red-400 transition-colors shadow-[0_0_15px_#ff0000]">
+                ACCETTO IL MIO DESTINO
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const penalties = [
+            "[NEIGHBORS] USA SOLO 1 OGGETTO",
+            "[CoD] FARE ALMENO 4 KILL",
+            "[CoD] SOLO ARMI CORPO A CORPO",
+            "[CoD] SOLO SDRAIATI O ACCOVACCIATI",
+            "[FALL GUYS] ASPETTA 10 SECONDI",
+            "[FALL GUYS] NON PUOI SALTARE",
+            "[ROCKET] GOAL DA RETROMARCIA",
+            "[ROCKET] SEGNA DI VOLO",
+            "[RAINBOW 6] SOLO PISTOLA",
+            "[RAINBOW 6] NO CORRERE NE' MIRARE",
+            "[NEIGHBORS] SUBIRE 3 ATTACCHI"
+        ];
+
+        // Colori per gli spicchi: alternanza di rosso scuro, arancione ruggine, grigio ferro
+        const colors = [
+            "#5e1313", "#8a3104", "#2b2b2b", 
+            "#5e1313", "#8a3104", "#2b2b2b", 
+            "#5e1313", "#8a3104", "#2b2b2b", 
+            "#5e1313", "#8a3104"
+        ];
+
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const modal = document.getElementById('resultModal');
+        const winnerText = document.getElementById('winnerText');
+        const closeModal = document.getElementById('closeModal');
+
+        const numSlices = penalties.length;
+        const sliceAngle = (2 * Math.PI) / numSlices;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = centerX;
+
+        let currentRotation = 0; // Rotazione attuale in radianti
+        let isSpinning = false;
+
+        // Funzione per disegnare la ruota
+        function drawWheel(rotationAngle = 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Applica la rotazione totale
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(rotationAngle);
+            
+            for (let i = 0; i < numSlices; i++) {
+                const startAngle = i * sliceAngle;
+                const endAngle = startAngle + sliceAngle;
+                
+                // Disegna lo spicchio
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, radius, startAngle, endAngle);
+                ctx.closePath();
+                
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = "#111"; // Bordo scuro tra gli spicchi
+                ctx.stroke();
+
+                // Aggiungi un po' di "sporco/ruggine" ai bordi (gradiente)
+                const grad = ctx.createRadialGradient(0, 0, radius * 0.7, 0, 0, radius);
+                grad.addColorStop(0, "transparent");
+                grad.addColorStop(1, "rgba(0,0,0,0.6)");
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Disegna il testo
+                ctx.save();
+                // Ruota a metà dello spicchio
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                
+                // Impostazioni font per massima leggibilità
+                ctx.font = "bold 34px 'Oswald', sans-serif";
+                
+                // Sposta il testo verso il bordo esterno
+                const textRadius = radius - 40; 
+                
+                // Ombra/Bordo nero per contrasto
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = "#000000";
+                ctx.lineJoin = "round";
+                ctx.strokeText(penalties[i], textRadius, 0);
+                
+                // Colore del testo (bianco sporco/giallino chiaro)
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(penalties[i], textRadius, 0);
+                
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        // Disegno iniziale
+        drawWheel();
+
+        function spin() {
+            if (isSpinning) return;
+            isSpinning = true;
+
+            // Suono o effetto opzionale? Qui ci limitiamo alla grafica come richiesto.
+            
+            // Calcola una rotazione target casuale: 
+            // Giri completi (almeno 5) + rotazione extra casuale
+            const spins = Math.floor(Math.random() * 5) + 5;
+            const randomExtraAngle = Math.random() * 2 * Math.PI;
+            const targetRotation = currentRotation + (spins * 2 * Math.PI) + randomExtraAngle;
+            
+            const duration = 5000; // 5 secondi
+            const startTime = performance.now();
+
+            // Funzione di easing (Ease Out Quart)
+            function easeOutQuart(t) {
+                return 1 - (--t) * t * t * t;
+            }
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                let progress = elapsed / duration;
+                
+                if (progress > 1) progress = 1;
+
+                const easeProgress = easeOutQuart(progress);
+                const currentAngle = currentRotation + (targetRotation - currentRotation) * easeProgress;
+                
+                drawWheel(currentAngle);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    currentRotation = targetRotation % (2 * Math.PI);
+                    isSpinning = false;
+                    determineWinner();
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function determineWinner() {
+            // Il puntatore è in alto (che corrisponde a -90 gradi o -PI/2 in Canvas,
+            // ma dato che il Canvas base parte da 0 gradi a destra (3 o'clock), 
+            // il "Nord" per la ruota ruotata è a 270 gradi (3 * PI / 2) rispetto allo zero della ruota).
+            
+            // Angolo in alto fisicamente
+            const pointerAngle = 3 * Math.PI / 2;
+            
+            // L'angolo effettivo considerando la rotazione:
+            // Dobbiamo trovare quale spicchio si trova sotto 'pointerAngle'
+            // normalizziamo la rotazione corrente
+            const normalizedRot = currentRotation % (2 * Math.PI);
+            
+            // L'angolo dello spicchio 0 attualmente si trova a `normalizedRot`.
+            // Quindi per trovare quale angolo della ruota coincide con il puntatore:
+            let winningAngle = (pointerAngle - normalizedRot + 2 * Math.PI) % (2 * Math.PI);
+            
+            // Trova l'indice
+            const winningIndex = Math.floor(winningAngle / sliceAngle);
+            
+            const result = penalties[winningIndex];
+            
+            // Mostra risultato nel modale
+            winnerText.textContent = result;
+            setTimeout(() => {
+                modal.classList.add('active');
+            }, 500); // Piccolo ritardo prima di mostrare
+        }
+
+        // Event Listeners
+        spinBtn.addEventListener('click', spin);
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('active');
+        });
+
+        const shareBtn = document.getElementById('shareBtn');
+        shareBtn.addEventListener('click', () => {
+            const url = window.location.href;
+            const tempInput = document.createElement('input');
+            tempInput.value = url;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+                const originalText = shareBtn.innerHTML;
+                shareBtn.innerHTML = '✅ Link Copiato nel Server Infernale!';
+                setTimeout(() => {
+                    shareBtn.innerHTML = originalText;
+                }, 3000);
+            } catch (err) {
+                console.error('Errore nella copia del link');
+            }
+            document.body.removeChild(tempInput);
+        });
+
+        const bgCanvas = document.getElementById('sparks-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        
+        let sparks = [];
+
+        function resizeBgCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeBgCanvas);
+        resizeBgCanvas();
+
+        class Spark {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = bgCanvas.height + Math.random() * 100; // Partono dal basso
+                this.size = Math.random() * 3 + 1;
+                this.speedY = Math.random() * -3 - 1;
+                this.speedX = Math.random() * 2 - 1;
+                this.life = Math.random() * 0.5 + 0.5; // Opacità iniziale
+                this.decay = Math.random() * 0.01 + 0.005; // Velocità di dissolvenza
+                // Colori tra arancio, rosso e giallo
+                const colors = ['#ff3300', '#ff6600', '#ffcc00', '#cc0000'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+            }
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX;
+                this.life -= this.decay;
+                if (this.life <= 0) {
+                    this.reset();
+                }
+            }
+            draw() {
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fillStyle = this.color;
+                bgCtx.globalAlpha = Math.max(0, this.life);
+                bgCtx.fill();
+            }
+        }
+
+        // Crea le scintille
+        for (let i = 0; i < 100; i++) {
+            sparks.push(new Spark());
+        }
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            
+            // Aggiungi un leggero fumo in basso
+            const gradient = bgCtx.createLinearGradient(0, bgCanvas.height, 0, bgCanvas.height - 300);
+            gradient.addColorStop(0, "rgba(255, 30, 0, 0.15)");
+            gradient.addColorStop(1, "transparent");
+            bgCtx.fillStyle = gradient;
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+            sparks.forEach(spark => {
+                spark.update();
+                spark.draw();
+            });
+            bgCtx.globalAlpha = 1; // Resetta alpha per il prossimo frame
+            requestAnimationFrame(animateBg);
+        }
+
+        animateBg();
+
+    </script>
+</body>
+</html>
